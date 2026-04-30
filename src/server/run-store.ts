@@ -33,7 +33,7 @@ export type PersistedRunState = {
   errorMessage?: string
 }
 
-const RUNS_ROOT = path.join(homedir(), '.hermes', 'webui-mvp', 'runs')
+const RUNS_ROOT = path.join(process.env.HERMES_HOME ?? homedir(), '.hermes', 'webui-mvp', 'runs')
 
 function encodeSessionKey(sessionKey: string): string {
   return encodeURIComponent(sessionKey || 'main')

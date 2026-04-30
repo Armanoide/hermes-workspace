@@ -46,7 +46,7 @@ const TEXT_REWRITE_EXTENSIONS = new Set([
 ])
 
 function getHermesRoot(): string {
-  return path.join(os.homedir(), '.hermes')
+  return process.env.HERMES_HOME ?? path.join(os.homedir(), '.hermes')
 }
 
 export function getProfilesRoot(): string {

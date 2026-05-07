@@ -31,6 +31,7 @@ import {
   triggerJob,
   updateJob,
 } from '@/lib/jobs-api'
+import { useProfiles } from '@/hooks/use-profiles'
 
 const QUERY_KEY = ['claude', 'jobs'] as const
 
@@ -105,7 +106,7 @@ function JobCard({
   onPause: (id: string) => void
   onResume: (id: string) => void
   onTrigger: (id: string) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string, name: string) => void
   onEdit: (job: ClaudeJob) => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -147,6 +148,18 @@ function JobCard({
             <h3 className="truncate text-sm font-medium text-[var(--theme-text)]">
               {job.name || '(unnamed)'}
             </h3>
+            {job.no_agent && (
+              <span
+                className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium"
+                style={{
+                  background: 'var(--theme-accent)',
+                  color: '#fff',
+                  opacity: 0.8,
+                }}
+              >
+                script
+              </span>
+            )}
           </div>
           <p className="mb-2 line-clamp-2 text-xs text-[var(--theme-muted)]">
             {job.prompt}
@@ -220,7 +233,7 @@ function JobCard({
             />
           </button>
           <button
-            onClick={() => onDelete(job.id)}
+            onClick={() => onDelete(job.id, job.name || '(unnamed)')}
             className="rounded-lg p-1.5 transition-colors hover:bg-[var(--theme-hover)]"
             title="Delete"
           >
@@ -296,42 +309,46 @@ export function JobsScreen() {
   const [showCreate, setShowCreate] = useState(false)
   const [editingJob, setEditingJob] = useState<ClaudeJob | null>(null)
 
+  const [selectedProfile, setSelectedProfile] = useState('default')
+
+  const profilesQuery = useProfiles()
+
   const jobsQuery = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: fetchJobs,
+    queryKey: [...QUERY_KEY, selectedProfile],
+    queryFn: () => fetchJobs(selectedProfile),
     refetchInterval: 30_000,
   })
 
   const pauseMutation = useMutation({
-    mutationFn: pauseJob,
+    mutationFn: (id: string) => pauseJob(id, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job paused')
     },
   })
   const resumeMutation = useMutation({
-    mutationFn: resumeJob,
+    mutationFn: (id: string) => resumeJob(id, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job resumed')
     },
   })
   const triggerMutation = useMutation({
-    mutationFn: triggerJob,
+    mutationFn: (id: string) => triggerJob(id, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job triggered')
     },
   })
   const deleteMutation = useMutation({
-    mutationFn: deleteJob,
+    mutationFn: (id: string) => deleteJob(id, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job deleted')
     },
   })
   const createMutation = useMutation({
-    mutationFn: createJob,
+    mutationFn: (input: Parameters<typeof createJob>[0]) => createJob(input, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job created')
@@ -349,12 +366,15 @@ export function JobsScreen() {
       updates: {
         name: string
         schedule: string
-        prompt: string
+        prompt?: string
         deliver?: Array<string>
         skills?: Array<string>
         repeat?: number
+        no_agent?: boolean
+        script?: string
+        move_to_profile?: string
       }
-    }) => updateJob(payload.jobId, payload.updates),
+    }) => updateJob(payload.jobId, payload.updates, selectedProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       toast('Job updated')
@@ -382,10 +402,12 @@ export function JobsScreen() {
     async (input: {
       name: string
       schedule: string
-      prompt: string
+      prompt?: string
       deliver?: Array<string>
       skills?: Array<string>
       repeat?: number
+      no_agent?: boolean
+      script?: string
     }) => {
       await createMutation.mutateAsync(input)
     },
@@ -396,7 +418,7 @@ export function JobsScreen() {
     <div className="min-h-full overflow-y-auto bg-surface text-ink">
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 px-4 py-6 pb-[calc(var(--tabbar-h,80px)+1.5rem)] sm:px-6 lg:px-8">
       <header className="rounded-2xl border border-primary-200 bg-primary-50/85 p-4 backdrop-blur-xl">
-      <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HugeiconsIcon
             icon={Clock01Icon}
@@ -413,6 +435,20 @@ export function JobsScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <select
+            value={selectedProfile}
+            onChange={(e) => setSelectedProfile(e.target.value)}
+            className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-input)] px-2 py-1.5 text-xs text-[var(--theme-text)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-accent)]"
+          >
+            <option value="default">Main Agent</option>
+            {profilesQuery.data
+              ?.filter((p: { name: string }) => p.name !== 'default')
+              .map((p: { name: string }) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
           <button
             onClick={() =>
               void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
@@ -490,8 +526,8 @@ export function JobsScreen() {
                 onResume={(id) => resumeMutation.mutate(id)}
                 onTrigger={(id) => triggerMutation.mutate(id)}
                 onEdit={(job) => setEditingJob(job)}
-                onDelete={(id) => {
-                  if (confirm(`Delete job "${job.name}"?`)) {
+                onDelete={(id, name) => {
+                  if (confirm(`Delete job "${name}"?`)) {
                     deleteMutation.mutate(id)
                   }
                 }}
@@ -506,6 +542,7 @@ export function JobsScreen() {
         onOpenChange={setShowCreate}
         onSubmit={handleCreate}
         isSubmitting={createMutation.isPending}
+        profile={selectedProfile}
       />
       <EditJobDialog
         job={editingJob}
@@ -519,8 +556,12 @@ export function JobsScreen() {
             jobId: editingJob.id,
             updates,
           })
+          if (updates.move_to_profile) {
+            setSelectedProfile(updates.move_to_profile)
+          }
         }}
         isSubmitting={updateMutation.isPending}
+        profile={selectedProfile}
       />
     </div>
     </div>

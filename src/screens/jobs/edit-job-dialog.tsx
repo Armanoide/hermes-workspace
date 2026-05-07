@@ -1,34 +1,31 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import type { ClaudeJob } from '@/lib/jobs-api'
-
-const SCHEDULE_PRESETS = [
-  { label: 'Every 15m', value: 'every 15m' },
-  { label: 'Every 30m', value: 'every 30m' },
-  { label: 'Every 1h', value: 'every 1h' },
-  { label: 'Every 6h', value: 'every 6h' },
-  { label: 'Daily', value: '0 9 * * *' },
-  { label: 'Weekly', value: '0 9 * * 1' },
-] as const
-
-const DELIVERY_OPTIONS = ['local', 'telegram', 'discord'] as const
+import { fetchCronScripts } from '@/lib/jobs-api'
+import { useProfiles } from '@/hooks/use-profiles'
+import { SCHEDULE_PRESETS, DELIVERY_OPTIONS } from '@/lib/job-constants'
 
 type EditJobDialogProps = {
   job: ClaudeJob | null
   open: boolean
   isSubmitting?: boolean
+  profile?: string
   onOpenChange: (open: boolean) => void
   onSubmit: (input: {
     name: string
     schedule: string
-    prompt: string
+    prompt?: string
     deliver?: Array<string>
     skills?: Array<string>
     repeat?: number
+    no_agent?: boolean
+    script?: string
+    move_to_profile?: string
   }) => void | Promise<void>
 }
 
@@ -75,6 +72,9 @@ function getInitialState(job: ClaudeJob | null) {
     repeatMode:
       remainingRepeats === null ? ('unlimited' as const) : ('limited' as const),
     repeatCount: remainingRepeats === null ? '1' : String(remainingRepeats),
+    mode: job?.no_agent ? ('script' as const) : ('agent' as const),
+    script: job?.script ?? '',
+    moveProfile: '',
   }
 }
 
@@ -82,10 +82,20 @@ export function EditJobDialog({
   job,
   open,
   isSubmitting = false,
+  profile = 'default',
   onOpenChange,
   onSubmit,
 }: EditJobDialogProps) {
   const [form, setForm] = useState(() => getInitialState(job))
+
+  const scriptsQuery = useQuery({
+    queryKey: ['cron-scripts', profile],
+    queryFn: () => fetchCronScripts(profile),
+    enabled: open && form.mode === 'script',
+    staleTime: 30_000,
+  })
+
+  const profilesQuery = useProfiles()
 
   useEffect(() => {
     if (!open) {
@@ -135,13 +145,16 @@ export function EditJobDialog({
     void onSubmit({
       name: form.name.trim(),
       schedule: form.schedule.trim(),
-      prompt: form.prompt.trim(),
+      prompt: form.mode === 'agent' ? form.prompt.trim() : undefined,
       deliver: form.deliver.length > 0 ? form.deliver : undefined,
       skills: skills.length > 0 ? Array.from(new Set(skills)) : undefined,
       repeat:
         form.repeatMode === 'limited'
           ? Math.max(1, Number.parseInt(form.repeatCount, 10) || 1)
           : undefined,
+      no_agent: form.mode === 'script',
+      script: form.mode === 'script' ? form.script : undefined,
+      move_to_profile: form.moveProfile && form.moveProfile !== profile ? form.moveProfile : undefined,
     })
   }
 
@@ -286,27 +299,63 @@ export function EditJobDialog({
                 </div>
               </section>
 
-              <section className="space-y-2">
-                <label className="text-sm font-medium">Prompt</label>
-                <textarea
-                  value={form.prompt}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      prompt: event.target.value,
-                    }))
-                  }
-                  placeholder="What should Hermes Agent do?"
-                  required
-                  rows={5}
-                  className="w-full resize-none rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-1"
-                  style={{
-                    background: 'var(--theme-input)',
-                    borderColor: 'var(--theme-border)',
-                    color: 'var(--theme-text)',
-                  }}
-                />
-              </section>
+              {form.mode === 'agent' ? (
+                <section className="space-y-2">
+                  <label className="text-sm font-medium">Prompt</label>
+                  <textarea
+                    value={form.prompt}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        prompt: event.target.value,
+                      }))
+                    }
+                    placeholder="What should Hermes Agent do?"
+                    required
+                    rows={5}
+                    className="w-full resize-none rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-1"
+                    style={{
+                      background: 'var(--theme-input)',
+                      borderColor: 'var(--theme-border)',
+                      color: 'var(--theme-text)',
+                    }}
+                  />
+                </section>
+              ) : (
+                <section className="space-y-2">
+                  <label className="text-sm font-medium">Script</label>
+                  <select
+                    value={form.script}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        script: event.target.value,
+                      }))
+                    }
+                    required
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-1"
+                    style={{
+                      background: 'var(--theme-input)',
+                      borderColor: 'var(--theme-border)',
+                      color: 'var(--theme-text)',
+                    }}
+                  >
+                    <option value="">Select a script...</option>
+                    {scriptsQuery.data?.map((script) => (
+                      <option key={script} value={script}>
+                        {script}
+                      </option>
+                    ))}
+                  </select>
+                  <p
+                    className="text-xs"
+                    style={{ color: 'var(--theme-muted)' }}
+                  >
+                    Scripts must exist in the profile&apos;s scripts/ directory.
+                    {scriptsQuery.isLoading && ' Loading...'}
+                  </p>
+                </section>
+              )}
 
               <section className="space-y-4">
                 <div>
@@ -456,6 +505,86 @@ export function EditJobDialog({
                   ) : null}
                 </div>
               </section>
+
+              <details className="group space-y-2">
+                <summary
+                  className="cursor-pointer select-none text-xs font-medium"
+                  style={{ color: 'var(--theme-muted)' }}
+                >
+                  Advanced edit settings
+                </summary>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Mode</label>
+                    <p
+                      className="text-xs"
+                      style={{ color: 'var(--theme-muted)' }}
+                    >
+                      Agent uses the LLM to execute the prompt. Script Only runs a script and delivers its output directly.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForm((current) => ({ ...current, mode: 'agent' }))}
+                        className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                        style={{
+                          background: form.mode === 'agent' ? 'var(--theme-accent)' : 'var(--theme-card)',
+                          borderColor: form.mode === 'agent' ? 'var(--theme-accent)' : 'var(--theme-border)',
+                          color: form.mode === 'agent' ? '#fff' : 'var(--theme-text)',
+                        }}
+                      >
+                        Agent
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm((current) => ({ ...current, mode: 'script' }))}
+                        className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                        style={{
+                          background: form.mode === 'script' ? 'var(--theme-accent)' : 'var(--theme-card)',
+                          borderColor: form.mode === 'script' ? 'var(--theme-accent)' : 'var(--theme-border)',
+                          color: form.mode === 'script' ? '#fff' : 'var(--theme-text)',
+                        }}
+                      >
+                        Script Only
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Move to profile</label>
+                    <select
+                      value={form.moveProfile}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          moveProfile: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-1"
+                      style={{
+                        background: 'var(--theme-input)',
+                        borderColor: 'var(--theme-border)',
+                        color: 'var(--theme-text)',
+                      }}
+                    >
+                      <option value="">— Current ({profile === 'default' ? 'Main Agent' : profile}) —</option>
+                      {profilesQuery.data
+                        ?.filter((p: { name: string }) => p.name !== profile)
+                        .map((p: { name: string }) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name === 'default' ? 'Main Agent' : p.name}
+                          </option>
+                        ))}
+                    </select>
+                    <p
+                      className="text-xs"
+                      style={{ color: 'var(--theme-muted)' }}
+                    >
+                      Select a different profile to move this job there. The job will be removed from the current profile.
+                    </p>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div
@@ -479,7 +608,8 @@ export function EditJobDialog({
                   isSubmitting ||
                   !form.name.trim() ||
                   !form.schedule.trim() ||
-                  !form.prompt.trim()
+                  (form.mode === 'agent' && !form.prompt.trim()) ||
+                  (form.mode === 'script' && !form.script)
                 }
                 className="rounded-xl px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-50"
                 style={{ background: 'var(--theme-accent)' }}

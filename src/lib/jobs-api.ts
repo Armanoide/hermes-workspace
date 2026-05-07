@@ -23,6 +23,8 @@ export type ClaudeJob = {
   skills?: Array<string>
   repeat?: { times?: number; completed?: number }
   run_count?: number
+  no_agent?: boolean
+  script?: string | null
 }
 
 export type HermesJob = ClaudeJob
@@ -115,8 +117,10 @@ export function getJobErrorText(job: ClaudeJob | null | undefined): string | nul
   return null
 }
 
-export async function fetchJobs(): Promise<Array<ClaudeJob>> {
-  const res = await fetch(`${CLAUDE_API}?include_disabled=true`)
+export async function fetchJobs(profile?: string): Promise<Array<ClaudeJob>> {
+  const params = new URLSearchParams({ include_disabled: 'true' })
+  if (profile) params.set('profile', profile)
+  const res = await fetch(`${CLAUDE_API}?${params}`)
   if (!res.ok) throw new Error(`Failed to fetch jobs: ${res.status}`)
   const data = await res.json()
   return normalizeJobsResponse(data)
@@ -164,24 +168,32 @@ function errorMessageFromBody(body: unknown, fallback: string): string {
 
 type JobMutationInput = {
   schedule: string
-  prompt: string
+  prompt?: string
   name?: string
   deliver?: Array<string>
   skills?: Array<string>
   repeat?: number
+  no_agent?: boolean
+  script?: string
 }
 
-export function buildJobMutationPayload(input: JobMutationInput): JobMutationInput & { input: string } {
+export function buildJobMutationPayload(input: JobMutationInput): JobMutationInput & { input?: string } {
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   return {
     ...input,
-    prompt,
-    input: prompt,
+    prompt: input.no_agent ? '' : prompt,
+    input: input.no_agent ? undefined : prompt,
   }
 }
 
-export async function createJob(input: JobMutationInput): Promise<ClaudeJob> {
-  const res = await fetch(CLAUDE_API, {
+export async function createJob(
+  input: JobMutationInput,
+  profile?: string,
+): Promise<ClaudeJob> {
+  const params = new URLSearchParams()
+  if (profile) params.set('profile', profile)
+  const url = params.toString() ? `${CLAUDE_API}?${params}` : CLAUDE_API
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(buildJobMutationPayload(input)),
@@ -196,12 +208,18 @@ export async function createJob(input: JobMutationInput): Promise<ClaudeJob> {
 export async function updateJob(
   jobId: string,
   updates: Record<string, unknown>,
+  profile?: string,
 ): Promise<ClaudeJob> {
   const payload =
     typeof updates.prompt === 'string'
       ? { ...updates, input: updates.prompt }
       : updates
-  const res = await fetch(`${CLAUDE_API}/${jobId}`, {
+  const params = new URLSearchParams()
+  if (profile) params.set('profile', profile)
+  const url = params.toString()
+    ? `${CLAUDE_API}/${jobId}?${params}`
+    : `${CLAUDE_API}/${jobId}`
+  const res = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -213,16 +231,23 @@ export async function updateJob(
   return (await res.json()).job
 }
 
-export async function deleteJob(jobId: string): Promise<void> {
-  const res = await fetch(`${CLAUDE_API}/${jobId}`, { method: 'DELETE' })
+export async function deleteJob(jobId: string, profile?: string): Promise<void> {
+  const params = new URLSearchParams()
+  if (profile) params.set('profile', profile)
+  const url = params.toString()
+    ? `${CLAUDE_API}/${jobId}?${params}`
+    : `${CLAUDE_API}/${jobId}`
+  const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(errorMessageFromBody(body, `Failed to delete job: ${res.status}`))
   }
 }
 
-export async function pauseJob(jobId: string): Promise<ClaudeJob> {
-  const res = await fetch(`${CLAUDE_API}/${jobId}?action=pause`, {
+export async function pauseJob(jobId: string, profile?: string): Promise<ClaudeJob> {
+  const params = new URLSearchParams({ action: 'pause' })
+  if (profile) params.set('profile', profile)
+  const res = await fetch(`${CLAUDE_API}/${jobId}?${params}`, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -232,8 +257,10 @@ export async function pauseJob(jobId: string): Promise<ClaudeJob> {
   return (await res.json()).job
 }
 
-export async function resumeJob(jobId: string): Promise<ClaudeJob> {
-  const res = await fetch(`${CLAUDE_API}/${jobId}?action=resume`, {
+export async function resumeJob(jobId: string, profile?: string): Promise<ClaudeJob> {
+  const params = new URLSearchParams({ action: 'resume' })
+  if (profile) params.set('profile', profile)
+  const res = await fetch(`${CLAUDE_API}/${jobId}?${params}`, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -243,8 +270,10 @@ export async function resumeJob(jobId: string): Promise<ClaudeJob> {
   return (await res.json()).job
 }
 
-export async function triggerJob(jobId: string): Promise<ClaudeJob> {
-  const res = await fetch(`${CLAUDE_API}/${jobId}?action=run`, {
+export async function triggerJob(jobId: string, profile?: string): Promise<ClaudeJob> {
+  const params = new URLSearchParams({ action: 'run' })
+  if (profile) params.set('profile', profile)
+  const res = await fetch(`${CLAUDE_API}/${jobId}?${params}`, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -261,4 +290,16 @@ export async function fetchJobOutput(
   const res = await fetch(`${CLAUDE_API}/${jobId}?action=output&limit=${limit}`)
   if (!res.ok) throw new Error(`Failed to fetch output: ${res.status}`)
   return (await res.json()).outputs ?? []
+}
+
+export async function fetchCronScripts(profile?: string): Promise<Array<string>> {
+  const params = new URLSearchParams()
+  if (profile) params.set('profile', profile)
+  const url = params.toString()
+    ? `/api/cron-scripts?${params}`
+    : '/api/cron-scripts'
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Failed to fetch scripts: ${res.status}`)
+  const data = await res.json()
+  return Array.isArray(data.scripts) ? data.scripts : []
 }

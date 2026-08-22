@@ -93,6 +93,7 @@ import { Route as ApiHermesConfigRouteImport } from './routes/api/hermes-config'
 import { Route as ApiGatewayStatusRouteImport } from './routes/api/gateway-status'
 import { Route as ApiGatewayReprobeRouteImport } from './routes/api/gateway-reprobe'
 import { Route as ApiFilesRouteImport } from './routes/api/files'
+import { Route as ApiExternalAgentsRouteImport } from './routes/api/external-agents'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiCrewStatusRouteImport } from './routes/api/crew-status'
 import { Route as ApiContextUsageRouteImport } from './routes/api/context-usage'
@@ -591,6 +592,11 @@ const ApiFilesRoute = ApiFilesRouteImport.update({
   path: '/api/files',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiExternalAgentsRoute = ApiExternalAgentsRouteImport.update({
+  id: '/api/external-agents',
+  path: '/api/external-agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEventsRoute = ApiEventsRouteImport.update({
   id: '/api/events',
   path: '/api/events',
@@ -1023,6 +1029,7 @@ export interface FileRoutesByFullPath {
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/files': typeof ApiFilesRoute
   '/api/gateway-reprobe': typeof ApiGatewayReprobeRoute
   '/api/gateway-status': typeof ApiGatewayStatusRoute
@@ -1184,6 +1191,7 @@ export interface FileRoutesByTo {
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/files': typeof ApiFilesRoute
   '/api/gateway-reprobe': typeof ApiGatewayReprobeRoute
   '/api/gateway-status': typeof ApiGatewayStatusRoute
@@ -1347,6 +1355,7 @@ export interface FileRoutesById {
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/files': typeof ApiFilesRoute
   '/api/gateway-reprobe': typeof ApiGatewayReprobeRoute
   '/api/gateway-status': typeof ApiGatewayStatusRoute
@@ -1511,6 +1520,7 @@ export interface FileRouteTypes {
     | '/api/context-usage'
     | '/api/crew-status'
     | '/api/events'
+    | '/api/external-agents'
     | '/api/files'
     | '/api/gateway-reprobe'
     | '/api/gateway-status'
@@ -1672,6 +1682,7 @@ export interface FileRouteTypes {
     | '/api/context-usage'
     | '/api/crew-status'
     | '/api/events'
+    | '/api/external-agents'
     | '/api/files'
     | '/api/gateway-reprobe'
     | '/api/gateway-status'
@@ -1834,6 +1845,7 @@ export interface FileRouteTypes {
     | '/api/context-usage'
     | '/api/crew-status'
     | '/api/events'
+    | '/api/external-agents'
     | '/api/files'
     | '/api/gateway-reprobe'
     | '/api/gateway-status'
@@ -1997,6 +2009,7 @@ export interface RootRouteChildren {
   ApiContextUsageRoute: typeof ApiContextUsageRoute
   ApiCrewStatusRoute: typeof ApiCrewStatusRoute
   ApiEventsRoute: typeof ApiEventsRoute
+  ApiExternalAgentsRoute: typeof ApiExternalAgentsRoute
   ApiFilesRoute: typeof ApiFilesRoute
   ApiGatewayReprobeRoute: typeof ApiGatewayReprobeRoute
   ApiGatewayStatusRoute: typeof ApiGatewayStatusRoute
@@ -2673,6 +2686,13 @@ declare module '@tanstack/react-router' {
       path: '/api/files'
       fullPath: '/api/files'
       preLoaderRoute: typeof ApiFilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/external-agents': {
+      id: '/api/external-agents'
+      path: '/api/external-agents'
+      fullPath: '/api/external-agents'
+      preLoaderRoute: typeof ApiExternalAgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/events': {
@@ -3466,6 +3486,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiContextUsageRoute: ApiContextUsageRoute,
   ApiCrewStatusRoute: ApiCrewStatusRoute,
   ApiEventsRoute: ApiEventsRoute,
+  ApiExternalAgentsRoute: ApiExternalAgentsRoute,
   ApiFilesRoute: ApiFilesRoute,
   ApiGatewayReprobeRoute: ApiGatewayReprobeRoute,
   ApiGatewayStatusRoute: ApiGatewayStatusRoute,

@@ -134,7 +134,7 @@ function getAionCoreUrl(): string {
   return (configured || DEFAULT_AIONCORE_URL).replace(/\/$/, '')
 }
 
-async function fetchAionCoreJson<T>(
+export async function requestAionCoreJson<T>(
   endpoint: string,
   init?: RequestInit,
   timeoutMs = AIONCORE_TIMEOUT_MS,
@@ -164,11 +164,11 @@ async function fetchAionCoreJson<T>(
 }
 
 async function readHealth(): Promise<AionCoreHealth> {
-  return fetchAionCoreJson<AionCoreHealth>('/health')
+  return requestAionCoreJson<AionCoreHealth>('/health')
 }
 
 async function readManagementRows(): Promise<Array<AionCoreAgentRow>> {
-  const payload = await fetchAionCoreJson<
+  const payload = await requestAionCoreJson<
     AionCoreEnvelope<Array<AionCoreAgentRow>>
   >('/api/agents/management')
   if (payload.success === false) {
@@ -215,7 +215,7 @@ export async function healthCheckExternalAgentRuntime(
     throw new Error('Invalid agent runtime id')
   }
 
-  const payload = await fetchAionCoreJson<AionCoreEnvelope<AionCoreAgentRow>>(
+  const payload = await requestAionCoreJson<AionCoreEnvelope<AionCoreAgentRow>>(
     `/api/agents/${encodeURIComponent(id)}/health-check`,
     { method: 'POST', body: '{}' },
     AIONCORE_HEALTH_CHECK_TIMEOUT_MS,

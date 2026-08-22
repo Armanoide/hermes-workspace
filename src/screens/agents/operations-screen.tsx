@@ -7,19 +7,13 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { seedAgentPresets } from './agent-presets'
-import { OrchestratorCard } from './components/orchestrator-card'
 import { OperationsAgentCard } from './components/operations-agent-card'
 import { OperationsAgentDetail } from './components/operations-agent-detail'
 import { OperationsNewAgentModal } from './components/operations-new-agent-modal'
 import { OperationsSettingsModal } from './components/operations-settings-modal'
-import { FullOutputsView } from './components/full-outputs-view'
-import { AgentBusPanel } from './components/agent-bus-panel'
-import { ExternalRuntimesPanel } from './components/external-runtimes-panel'
 import { useOperations } from './hooks/use-operations'
 import type { CSSProperties } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { formatRelativeTime } from '@/screens/dashboard/lib/formatters'
 
 export const THEME_STYLE: CSSProperties = {
   ['--theme-bg' as string]: 'var(--color-surface)',
@@ -61,10 +55,8 @@ export function OperationsScreen() {
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsAgentId, setSettingsAgentId] = useState<string | null>(null)
-  const [view, setView] = useState<'overview' | 'outputs'>('overview')
   const {
     agents,
-    recentActivity,
     configQuery,
     sessionsQuery,
     cronJobsQuery,
@@ -102,46 +94,20 @@ export function OperationsScreen() {
             </div>
             <div>
               <h1 className="text-base font-semibold text-primary-900">
-                Operations
+                Assistants
               </h1>
               <p className="mt-1 text-sm text-primary-600">
-                Your persistent agent team
+                Configure persistent agents and their defaults
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setView('overview')}
-                className={cn(
-                  'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  view === 'overview'
-                    ? 'bg-[var(--theme-accent)] text-primary-950'
-                    : 'text-[var(--theme-muted)] hover:bg-[var(--theme-card2)]',
-                )}
-              >
-                Overview
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('outputs')}
-                className={cn(
-                  'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  view === 'outputs'
-                    ? 'bg-[var(--theme-accent)] text-primary-950'
-                    : 'text-[var(--theme-muted)] hover:bg-[var(--theme-card2)]',
-                )}
-              >
-                Outputs
-              </button>
-            </div>
             <Button
               className="bg-[var(--theme-accent)] text-primary-950 hover:bg-[var(--theme-accent-strong)]"
               onClick={() => setNewAgentOpen(true)}
             >
               <HugeiconsIcon icon={PlusSignIcon} size={16} strokeWidth={1.8} />
-              New Agent
+              New Assistant
             </Button>
             <Button
               variant="secondary"
@@ -160,40 +126,24 @@ export function OperationsScreen() {
 
         {isLoading ? (
           <section className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-6 py-12 text-center text-sm text-[var(--theme-muted)] shadow-[0_24px_80px_var(--theme-shadow)]">
-            Loading Operations roster…
+            Loading assistants…
           </section>
         ) : error ? (
           <section className="rounded-3xl border border-[var(--theme-danger-border)] bg-[var(--theme-danger-soft)] px-6 py-12 text-center text-sm text-[var(--theme-text)] shadow-[0_24px_80px_var(--theme-shadow)]">
             {error}
           </section>
-        ) : view === 'outputs' ? (
-          <FullOutputsView />
         ) : (
           <>
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-            >
-              <OrchestratorCard totalAgents={agents.length} />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05, duration: 0.25 }}
-            >
-              <AgentBusPanel />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08, duration: 0.25 }}
-            >
-              <ExternalRuntimesPanel />
-            </motion.div>
-
+            <div className="flex items-center justify-between rounded-xl border border-primary-200 bg-primary-50/60 px-4 py-3 text-sm">
+              <span className="text-primary-600">
+                {agents.length} configured assistant
+                {agents.length === 1 ? '' : 's'}
+              </span>
+              <span className="text-primary-500">
+                {agents.filter((agent) => agent.status === 'active').length}{' '}
+                active
+              </span>
+            </div>
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {agents.map((agent, index) => (
                 <motion.div
@@ -223,54 +173,9 @@ export function OperationsScreen() {
                   className="text-[var(--theme-muted)]"
                 />
                 <span className="mt-3 text-sm text-[var(--theme-muted)]">
-                  Add Agent
+                  Add Assistant
                 </span>
               </motion.button>
-            </section>
-
-            <section className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-5 shadow-[0_24px_80px_var(--theme-shadow)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-[var(--theme-text)]">
-                    Recent Activity
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--theme-muted-2)]">
-                    Latest outputs across the team
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 space-y-3">
-                {recentActivity.length > 0 ? (
-                  recentActivity.map((activity) => {
-                    const agent = agents.find(
-                      (entry) => entry.id === activity.agentId,
-                    )
-                    return (
-                      <div
-                        key={activity.id}
-                        className="flex flex-col gap-2 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 md:flex-row md:items-center md:justify-between"
-                      >
-                        <p className="text-sm text-[var(--theme-text)]">
-                          <span className="mr-2">
-                            {agent?.meta.emoji ?? '🤖'}
-                          </span>
-                          <span className="font-medium">
-                            {agent?.name ?? activity.agentId}:
-                          </span>{' '}
-                          {activity.summary}
-                        </p>
-                        <span className="shrink-0 text-sm text-[var(--theme-muted)]">
-                          {formatRelativeTime(activity.timestamp)}
-                        </span>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-6 text-sm text-[var(--theme-muted)]">
-                    No recent activity yet.
-                  </div>
-                )}
-              </div>
             </section>
           </>
         )}

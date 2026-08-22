@@ -7,8 +7,14 @@ local harnesses.
 
 ## Current integration
 
-- The Operations screen discovers installed runtimes and shows their real
-  connection status.
+- Chat opens on a command center that combines native Hermes activity, external
+  harness sessions, tasks waiting for review, and recent completions.
+- The Chat navigation expands into All Agents, Hermes, Codex, Grok, OpenClaw,
+  and any other installed AionCore runtimes.
+- External conversations can be created, reopened, and continued in the Hermes
+  Workspace chat UI.
+- The Assistants screen is reserved for persistent-agent configuration; live
+  activity and harness diagnostics live in Chat.
 - Each runtime can be tested without exposing AionCore directly to the browser.
 - The desktop app starts AionCore as a child process and stops it when Hermes
   Workspace exits.
@@ -31,14 +37,15 @@ process. `AIONCORE_WORK_DIR` overrides the default `~/workspace` working root.
 
 ## Security boundary
 
-The renderer only talks to the authenticated Hermes Workspace
-`/api/external-agents` route. That route validates runtime IDs and returns a
-small allowlisted status payload. AionCore remains bound to localhost by
-default.
+The renderer only talks to authenticated Hermes Workspace API routes. Runtime
+and conversation IDs are validated server-side, response payloads are
+allowlisted, messages are size-limited, and conversation creation is limited to
+installed, enabled conversational runtimes. AionCore remains bound to localhost
+by default.
 
 ## Next milestone
 
-The next layer maps AionCore conversation streams into Hermes Workspace's
-existing message, tool-call, approval, and artifact components. After that,
-remote ACP endpoints can be registered through Tailscale without replacing the
-native Hermes session database.
+The next layer replaces short polling with AionCore's live event stream and maps
+tool calls, approval prompts, artifacts, and team runs into the same command
+center. Remote ACP endpoints can then be registered through Tailscale without
+replacing the native Hermes session database.

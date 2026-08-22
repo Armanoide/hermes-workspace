@@ -19,6 +19,7 @@ import {
   Sun02Icon,
   UserGroupIcon,
   UserMultipleIcon,
+  ViewOffIcon,
 } from '@hugeicons/core-free-icons'
 import { AnimatePresence, motion } from 'motion/react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
@@ -61,6 +62,7 @@ import {
 } from '@/components/ui/menu'
 import { applyTheme, useSettingsStore } from '@/hooks/use-settings'
 import { fetchExternalRuntimes } from '@/lib/external-harness-api'
+import { useHarnessVisibility } from '@/screens/chat/harness-visibility'
 
 type WorkspaceStats = Record<string, unknown>
 
@@ -499,6 +501,7 @@ function HarnessChatNav({
   active: boolean
   onSelectSession?: () => void
 }) {
+  const { hiddenIds, hiddenSet } = useHarnessVisibility()
   const runtimesQuery = useQuery({
     queryKey: ['external-harnesses'],
     queryFn: fetchExternalRuntimes,
@@ -580,16 +583,20 @@ function HarnessChatNav({
               <span className="size-1.5 rounded-full bg-violet-500" />
               All agents
             </Link>
-            <Link
-              to="/chat/$sessionKey"
-              params={{ sessionKey: 'main' }}
-              onClick={onSelectSession}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-primary-600 hover:bg-primary-100 hover:text-primary-900"
-            >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              Hermes
-            </Link>
-            {(runtimesQuery.data?.runtimes ?? []).map((runtime) => (
+            {!hiddenSet.has('hermes-native') && (
+              <Link
+                to="/chat/$sessionKey"
+                params={{ sessionKey: 'main' }}
+                onClick={onSelectSession}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-primary-600 hover:bg-primary-100 hover:text-primary-900"
+              >
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                Hermes
+              </Link>
+            )}
+            {(runtimesQuery.data?.runtimes ?? [])
+              .filter((runtime) => !hiddenSet.has(runtime.id))
+              .map((runtime) => (
               <Link
                 key={runtime.id}
                 to="/chat/harness/$runtimeId"
@@ -616,7 +623,17 @@ function HarnessChatNav({
                       : runtime.name}
                 </span>
               </Link>
-            ))}
+              ))}
+            {hiddenIds.length > 0 && (
+              <Link
+                to="/chat"
+                onClick={onSelectSession}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-primary-400 hover:bg-primary-100 hover:text-primary-700"
+              >
+                <HugeiconsIcon icon={ViewOffIcon} size={12} />
+                {hiddenIds.length} hidden
+              </Link>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

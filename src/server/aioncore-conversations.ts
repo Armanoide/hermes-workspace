@@ -2,6 +2,14 @@ import {
   getAionCoreCompanionSnapshot,
   requestAionCoreJson,
 } from './aioncore-companion'
+import {
+  createRemoteConversation,
+  deleteRemoteConversation,
+  getRemoteConversation,
+  listRemoteConversations,
+  listRemoteMessages,
+  sendRemoteMessage,
+} from './remote-harnesses'
 
 type AionCoreEnvelope<T> = {
   success?: boolean
@@ -158,25 +166,38 @@ export function normalizeExternalConversationMessage(
 export async function listExternalConversations(): Promise<
   Array<ExternalConversation>
 > {
-  const payload = await requestAionCoreJson<
-    AionCoreEnvelope<PaginatedRows<AionCoreConversationRow>>
-  >('/api/conversations?limit=100')
-  if (payload.success === false) {
-    throw new Error(payload.error || 'External conversations are unavailable')
+  const [localResult, remoteResult] = await Promise.allSettled([
+    requestAionCoreJson<
+      AionCoreEnvelope<PaginatedRows<AionCoreConversationRow>>
+    >('/api/conversations?limit=100'),
+    listRemoteConversations(),
+  ])
+  const local =
+    localResult.status === 'fulfilled' &&
+    localResult.value.success !== false
+      ? (localResult.value.data?.items ?? [])
+          .map(normalizeExternalConversation)
+          .filter(
+            (conversation): conversation is ExternalConversation =>
+              conversation !== null,
+          )
+      : []
+  const remote =
+    remoteResult.status === 'fulfilled' ? remoteResult.value : []
+  if (!local.length && !remote.length && localResult.status === 'rejected') {
+    throw localResult.reason
   }
-  return (payload.data?.items ?? [])
-    .map(normalizeExternalConversation)
-    .filter(
-      (conversation): conversation is ExternalConversation =>
-        conversation !== null,
-    )
-    .sort((left, right) => right.modifiedAt - left.modifiedAt)
+  return [...remote, ...local].sort(
+    (left, right) => right.modifiedAt - left.modifiedAt,
+  )
 }
 
 export async function getExternalConversation(
   rawId: string,
 ): Promise<ExternalConversation> {
   const id = conversationId(rawId)
+  const remote = await getRemoteConversation(id)
+  if (remote) return remote
   const payload = await requestAionCoreJson<
     AionCoreEnvelope<AionCoreConversationRow>
   >(`/api/conversations/${encodeURIComponent(id)}`)
@@ -193,6 +214,8 @@ export async function createExternalConversation(input: {
   name?: string
 }): Promise<ExternalConversation> {
   const runtimeId = conversationId(input.runtimeId)
+  const remote = await createRemoteConversation(runtimeId, input.name)
+  if (remote) return remote
   const snapshot = await getAionCoreCompanionSnapshot()
   if (!snapshot.online) {
     throw new Error(snapshot.error || 'AionCore companion is unavailable')
@@ -235,6 +258,7 @@ export async function createExternalConversation(input: {
 
 export async function deleteExternalConversation(rawId: string): Promise<void> {
   const id = conversationId(rawId)
+  if (await deleteRemoteConversation(id)) return
   const payload = await requestAionCoreJson<AionCoreEnvelope<unknown>>(
     `/api/conversations/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
@@ -248,6 +272,8 @@ export async function listExternalConversationMessages(
   rawId: string,
 ): Promise<Array<ExternalConversationMessage>> {
   const id = conversationId(rawId)
+  const remote = await listRemoteMessages(id)
+  if (remote) return remote
   const payload = await requestAionCoreJson<
     AionCoreEnvelope<PaginatedRows<AionCoreMessageRow>>
   >(
@@ -274,6 +300,8 @@ export async function sendExternalConversationMessage(
   if (!message || message.length > 200_000) {
     throw new Error('Message must be between 1 and 200,000 characters')
   }
+  const remote = await sendRemoteMessage(id, message)
+  if (remote) return remote
   const payload = await requestAionCoreJson<
     AionCoreEnvelope<{ msg_id?: string; turn_id?: string }>
   >(

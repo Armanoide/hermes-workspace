@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -7,9 +7,11 @@ import {
   Chat01Icon,
   CheckListIcon,
   Clock01Icon,
+  EyeIcon,
   PlusSignIcon,
   UserGroupIcon,
   UserMultipleIcon,
+  ViewOffIcon,
 } from '@hugeicons/core-free-icons'
 import type {
   ExternalConversation,
@@ -17,6 +19,7 @@ import type {
 } from '@/lib/external-harness-api'
 import type { ClaudeTask } from '@/lib/tasks-api'
 import { useOperations } from '@/screens/agents/hooks/use-operations'
+import { useHarnessVisibility } from '@/screens/chat/harness-visibility'
 import { fetchTasks } from '@/lib/tasks-api'
 import { fetchSessions } from '@/lib/gateway-api'
 import {
@@ -140,6 +143,9 @@ export function AgentCommandCenter({
 }: AgentCommandCenterProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [showHiddenHarnesses, setShowHiddenHarnesses] = useState(false)
+  const { hiddenIds, hiddenSet, toggleHarness, showAllHarnesses } =
+    useHarnessVisibility()
   const operations = useOperations()
   const runtimesQuery = useQuery({
     queryKey: ['external-harnesses'],
@@ -163,6 +169,11 @@ export function AgentCommandCenter({
   })
 
   const runtimes = runtimesQuery.data?.runtimes ?? []
+  const visibleRuntimes = runtimes.filter(
+    (runtime) => !hiddenSet.has(runtime.id),
+  )
+  const hiddenRuntimes = runtimes.filter((runtime) => hiddenSet.has(runtime.id))
+  const nativeHermesHidden = hiddenSet.has('hermes-native')
   const conversations = conversationsQuery.data ?? []
   const tasks = tasksQuery.data ?? []
   const selectedRuntime = runtimes.find(
@@ -231,7 +242,7 @@ export function AgentCommandCenter({
     },
   })
 
-  const onlineCount = runtimes.filter(
+  const onlineCount = visibleRuntimes.filter(
     (runtime) => runtime.status === 'online',
   ).length
   const workingCount =
@@ -296,7 +307,7 @@ export function AgentCommandCenter({
             { label: 'Completed', value: doneTasks.length, dot: 'bg-sky-500' },
             {
               label: 'Harnesses online',
-              value: `${onlineCount}/${runtimes.length}`,
+              value: `${onlineCount}/${visibleRuntimes.length}`,
               dot: 'bg-violet-500',
             },
           ].map((stat) => (
@@ -328,62 +339,138 @@ export function AgentCommandCenter({
                   Pick a harness or open the full roster.
                 </p>
               </div>
-              <Link
-                to="/operations"
-                className="text-xs font-medium text-accent-600 hover:text-accent-700"
-              >
-                Manage assistants
-              </Link>
+              <div className="flex items-center gap-2">
+                {hiddenIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenHarnesses((value) => !value)}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-primary-500 hover:bg-primary-100 hover:text-primary-800"
+                  >
+                    <HugeiconsIcon icon={ViewOffIcon} size={14} />
+                    {hiddenIds.length} hidden
+                  </button>
+                )}
+                <Link
+                  to="/operations"
+                  className="text-xs font-medium text-accent-600 hover:text-accent-700"
+                >
+                  Manage assistants
+                </Link>
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <Link
-                to="/chat/$sessionKey"
-                params={{ sessionKey: 'new' }}
-                className="flex items-center gap-3 rounded-xl border border-primary-200 bg-surface px-3 py-3 transition-colors hover:bg-primary-100"
-              >
-                <span className="flex size-9 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
-                  <HugeiconsIcon icon={Chat01Icon} size={18} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">Hermes</span>
-                  <span className="block truncate text-xs text-primary-500">
-                    Native workspace · {nativeSessions.length} sessions
-                  </span>
-                </span>
-                <span className="size-2 rounded-full bg-emerald-500" />
-              </Link>
-              {runtimes.map((runtime) => {
+              {!nativeHermesHidden && (
+                <div className="group flex items-center rounded-xl border border-primary-200 bg-surface transition-colors hover:bg-primary-100">
+                  <Link
+                    to="/chat/$sessionKey"
+                    params={{ sessionKey: 'new' }}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3"
+                  >
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
+                      <HugeiconsIcon icon={Chat01Icon} size={18} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">Hermes</span>
+                      <span className="block truncate text-xs text-primary-500">
+                        Native workspace · {nativeSessions.length} sessions
+                      </span>
+                    </span>
+                    <span className="size-2 rounded-full bg-emerald-500" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => toggleHarness('hermes-native')}
+                    className="mr-2 flex size-8 items-center justify-center rounded-lg text-primary-300 opacity-0 transition-opacity hover:bg-primary-200 hover:text-primary-700 group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Hide native Hermes"
+                    title="Hide harness"
+                  >
+                    <HugeiconsIcon icon={EyeIcon} size={16} />
+                  </button>
+                </div>
+              )}
+              {visibleRuntimes.map((runtime) => {
                 const sessionCount = conversations.filter(
                   (conversation) => conversation.runtimeId === runtime.id,
                 ).length
                 return (
-                  <Link
+                  <div
                     key={runtime.id}
-                    to="/chat/harness/$runtimeId"
-                    params={{ runtimeId: runtime.id }}
-                    className="flex items-center gap-3 rounded-xl border border-primary-200 bg-surface px-3 py-3 transition-colors hover:bg-primary-100"
+                    className="group flex items-center rounded-xl border border-primary-200 bg-surface transition-colors hover:bg-primary-100"
                   >
-                    <span className="flex size-9 items-center justify-center rounded-xl bg-primary-100 text-primary-700">
-                      <HugeiconsIcon icon={UserMultipleIcon} size={18} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {runtimeLabel(runtime)}
+                    <Link
+                      to="/chat/harness/$runtimeId"
+                      params={{ runtimeId: runtime.id }}
+                      className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3"
+                    >
+                      <span className="flex size-9 items-center justify-center rounded-xl bg-primary-100 text-primary-700">
+                        <HugeiconsIcon icon={UserMultipleIcon} size={18} />
                       </span>
-                      <span className="block truncate text-xs text-primary-500">
-                        {runtime.backend} · {sessionCount} sessions
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {runtimeLabel(runtime)}
+                        </span>
+                        <span className="block truncate text-xs text-primary-500">
+                          {runtime.backend} · {sessionCount} sessions
+                        </span>
                       </span>
-                    </span>
-                    <span
-                      className={cn(
-                        'size-2 rounded-full',
-                        runtimeStatusClass(runtime.status),
-                      )}
-                    />
-                  </Link>
+                      <span
+                        className={cn(
+                          'size-2 rounded-full',
+                          runtimeStatusClass(runtime.status),
+                        )}
+                      />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => toggleHarness(runtime.id)}
+                      className="mr-2 flex size-8 items-center justify-center rounded-lg text-primary-300 opacity-0 transition-opacity hover:bg-primary-200 hover:text-primary-700 group-hover:opacity-100 focus:opacity-100"
+                      aria-label={`Hide ${runtimeLabel(runtime)}`}
+                      title="Hide harness"
+                    >
+                      <HugeiconsIcon icon={EyeIcon} size={16} />
+                    </button>
+                  </div>
                 )
               })}
             </div>
+            {showHiddenHarnesses && hiddenIds.length > 0 && (
+              <div className="mt-3 rounded-xl border border-dashed border-primary-200 bg-primary-100/40 p-2">
+                <div className="mb-1 flex items-center justify-between px-2 py-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-500">
+                    Hidden harnesses
+                  </span>
+                  <button
+                    type="button"
+                    onClick={showAllHarnesses}
+                    className="text-[11px] font-medium text-accent-600 hover:text-accent-700"
+                  >
+                    Show all
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {nativeHermesHidden && (
+                    <button
+                      type="button"
+                      onClick={() => toggleHarness('hermes-native')}
+                      className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-xs text-primary-600 hover:text-primary-900"
+                    >
+                      <HugeiconsIcon icon={ViewOffIcon} size={13} /> Hermes
+                    </button>
+                  )}
+                  {hiddenRuntimes.map((runtime) => (
+                    <button
+                      key={runtime.id}
+                      type="button"
+                      onClick={() => toggleHarness(runtime.id)}
+                      className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-xs text-primary-600 hover:text-primary-900"
+                    >
+                      <HugeiconsIcon icon={ViewOffIcon} size={13} />
+                      {runtimeLabel(runtime)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

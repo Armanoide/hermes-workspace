@@ -19,6 +19,21 @@ import { cn } from '@/lib/utils'
 function messageText(message: ExternalConversationMessage): string {
   const { content } = message
   if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (part && typeof part === 'object') {
+          const row = part as Record<string, unknown>
+          if (typeof row.text === 'string') return row.text
+          if (typeof row.content === 'string') return row.content
+          if (typeof row.message === 'string') return row.message
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
   if (content && typeof content === 'object') {
     const row = content as Record<string, unknown>
     if (typeof row.content === 'string') return row.content
@@ -49,7 +64,7 @@ export function ExternalHarnessChatScreen({
   const messagesQuery = useQuery({
     queryKey: ['external-conversation-messages', conversationId],
     queryFn: () => fetchExternalMessages(conversationId),
-    refetchInterval: 1_000,
+    refetchInterval: 2_000,
   })
   const sendMutation = useMutation({
     mutationFn: (content: string) =>
